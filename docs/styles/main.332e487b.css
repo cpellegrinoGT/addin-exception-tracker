@@ -15519,13 +15519,15 @@ button.zen-summary__clickable {
   padding: 0 16px 16px;
 }
 
-/* Override Zenith Table's internal scroll container to show all rows */
-.fut-content [class*="tableWrapper"],
-.fut-content [class*="TableWrapper"],
-.fut-content [class*="table-wrapper"],
-.fut-content [class*="scrollable"] {
-  max-height: none !important;
+/* Override Zenith Table to show all rows instead of fixed-height scroll */
+.fut-content .zen-data-grid-wrapper {
+  height: auto !important;
+  contain: none !important;
+}
+
+.fut-content .zen-data-grid {
   overflow: visible !important;
+  flex: 0 0 auto !important;
 }
 
 /* Panel toolbars (above tables) */
