@@ -44,10 +44,9 @@ export interface ExceptionEventRecord {
   id: string;
   device?: { id: string };
   rule?: { id: string };
-  duration?: string;          // ISO 8601 duration or seconds string
-  dateTime?: string;
-  from?: string;
-  to?: string;
+  duration?: string;
+  activeFrom?: string;
+  activeTo?: string;
   distance?: number;
 }
 

@@ -31,7 +31,15 @@ export function buildDeviceRows(
     if (!devId || !ruleId) continue;
     if (!deviceExceptions[devId]) deviceExceptions[devId] = {};
     if (!deviceExceptions[devId][ruleId]) deviceExceptions[devId][ruleId] = 0;
-    deviceExceptions[devId][ruleId] += parseDurationToHours(e.duration);
+
+    let hours = 0;
+    if (e.duration) {
+      hours = parseDurationToHours(e.duration);
+    } else if (e.activeFrom && e.activeTo) {
+      const ms = new Date(e.activeTo).getTime() - new Date(e.activeFrom).getTime();
+      if (ms > 0) hours = ms / 3600000;
+    }
+    deviceExceptions[devId][ruleId] += hours;
   }
 
   // Build a set of all device IDs that appear in trips or events

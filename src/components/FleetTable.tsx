@@ -92,14 +92,6 @@ export default function FleetTable({ rows, selectedRules }: FleetTableProps) {
           render: (entity: FleetTableEntity) => formatHours(entity.totalUtilHours),
         },
       },
-      {
-        id: "utilPct",
-        title: "Util %",
-        sortable: true,
-        columnComponent: {
-          render: (entity: FleetTableEntity) => formatPct(entity.utilPct),
-        },
-      },
     ];
 
     // Add dynamic rule columns
@@ -134,7 +126,7 @@ export default function FleetTable({ rows, selectedRules }: FleetTableProps) {
   }, [selectedRules]);
 
   const handleExport = useCallback(() => {
-    const headers = ["Device Name", "Drive Time", "Idle Time", "Total Utilization", "Util %"];
+    const headers = ["Device Name", "Drive Time", "Idle Time", "Total Utilization"];
     for (const rule of selectedRules) {
       const name = rule.name || rule.id;
       headers.push(`${name} (hrs)`, `${name} (%)`);
@@ -146,7 +138,6 @@ export default function FleetTable({ rows, selectedRules }: FleetTableProps) {
         "Drive Time": formatHours(r.driveHours),
         "Idle Time": formatHours(r.idleHours),
         "Total Utilization": formatHours(r.totalUtilHours),
-        "Util %": formatPct(r.utilPct),
       };
       for (const rule of selectedRules) {
         const name = rule.name || rule.id;
