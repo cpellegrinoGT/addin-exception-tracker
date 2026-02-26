@@ -15333,11 +15333,10 @@ button.zen-summary__clickable {
 #fut-root {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
   font-family: var(--zen-fontFamily, "Roboto", system-ui, -apple-system, sans-serif);
   font-size: 14px;
   color: var(--zen-color-text, #333);
-  overflow: hidden;
   position: relative;
 }
 
@@ -15515,8 +15514,7 @@ button.zen-summary__clickable {
 /* ── Content ─────────────────────────────────────────────────────── */
 
 .fut-content {
-  flex: 1;
-  overflow: auto;
+  flex: 1 0 auto;
   position: relative;
   padding: 0 16px 16px;
 }
