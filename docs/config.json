@@ -1,0 +1,16 @@
+{
+  "name": "Fleet Utilization & Exception Tracker",
+  "supportEmail": "support@example.com",
+  "version": "1.0",
+  "items": [
+    {
+      "url": "https://cpellegrinoGT.github.io/addin-exception-tracker/fut.html",
+      "path": "ActivityLink/",
+      "menuName": {
+        "en": "Fleet Utilization & Exception Tracker"
+      },
+      "svgIcon": "https://cpellegrinoGT.github.io/addin-exception-tracker/images/icon.svg"
+    }
+  ],
+  "files": {}
+}
