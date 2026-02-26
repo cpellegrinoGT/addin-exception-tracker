@@ -9,7 +9,7 @@ import "./styles/addin.css";
  * Lifecycle bridge: translates MyGeotab add-in lifecycle (initialize/focus/blur)
  * into React component method calls via a ref.
  */
-geotab.addin.fleetUtilization = function () {
+geotab.addin.fleetUtilizationExceptionTracker = function () {
   "use strict";
 
   let root = null;
@@ -17,7 +17,7 @@ geotab.addin.fleetUtilization = function () {
 
   return {
     initialize(api, state, callback) {
-      const container = document.getElementById("fleetUtilization");
+      const container = document.getElementById("fleetUtilizationExceptionTracker");
       root = createRoot(container);
 
       root.render(
