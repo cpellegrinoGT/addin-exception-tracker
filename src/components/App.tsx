@@ -10,7 +10,7 @@ import {
 import { UserFormatProvider } from "@geotab/zenith";
 import type {
   GeotabApi, GeotabState, DeviceRow, FleetKpis, ExceptionChartPoint,
-  Rule, TripRecord, ExceptionEventRecord, Device,
+  Rule, TripRecord, ExceptionEventRecord,
 } from "../types";
 import { useFoundationData } from "../hooks/useFoundationData";
 import { useTrips } from "../hooks/useTrips";
@@ -64,7 +64,7 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
 
   // Cached data from last Apply so we can re-fetch exceptions when rules change
   const cachedTrips = useRef<TripRecord[]>([]);
-  const cachedDevices = useRef<Device[]>([]);
+  const cachedDeviceIds = useRef<Set<string>>(new Set());
   const cachedDateRange = useRef<{ from: string; to: string } | null>(null);
   const cachedPeriodSeconds = useRef(0);
   const dataLoaded = useRef(false);
@@ -180,14 +180,20 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
     const periodMs = new Date(dr.to).getTime() - new Date(dr.from).getTime();
     const periodSeconds = periodMs / 1000;
 
+    // Build device ID set for filtering (empty = all devices)
+    const isAllDevices = selectedGroup === "all" && selectedDevice === "all";
+    const filterDeviceIds = new Set<string>(
+      isAllDevices ? [] : filteredDevices.map((d) => d.id),
+    );
+
     try {
       // Step 1: Fetch trips
-      const trips = await fetchTrips(api, filteredDevices, dr);
+      const trips = await fetchTrips(api, filterDeviceIds, dr);
       if (!trips) return;
 
       // Cache for rule-toggle re-fetches
       cachedTrips.current = trips;
-      cachedDevices.current = filteredDevices;
+      cachedDeviceIds.current = filterDeviceIds;
       cachedDateRange.current = dr;
       cachedPeriodSeconds.current = periodSeconds;
       dataLoaded.current = true;
@@ -195,7 +201,7 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
       // Step 2: Fetch exception events (if rules selected)
       let events: ExceptionEventRecord[] = [];
       if (selectedRules.length > 0) {
-        const result = await fetchEvents(api, filteredDevices, selectedRules, dr);
+        const result = await fetchEvents(api, filterDeviceIds, selectedRules, dr);
         if (!result) return;
         events = result;
       }
@@ -238,7 +244,7 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
     (async () => {
       try {
         const events = await fetchEvents(
-          api, cachedDevices.current, selectedRules, cachedDateRange.current!,
+          api, cachedDeviceIds.current, selectedRules, cachedDateRange.current!,
         );
         if (!events) return;
         aggregate(cachedTrips.current, events, selectedRules, cachedPeriodSeconds.current);

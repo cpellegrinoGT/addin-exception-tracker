@@ -1,10 +1,9 @@
 import { useState, useCallback, useRef } from "react";
-import type { GeotabApi, Device, TripRecord } from "../types";
-import { apiMultiCall, delay } from "../lib/geotabApi";
+import type { GeotabApi, TripRecord } from "../types";
+import { apiCall, delay } from "../lib/geotabApi";
 
-const CHUNK_DAYS = 14;
-const BATCH_DELAY_MS = 100;
-const DEVICE_BATCH_SIZE = 50;
+const CHUNK_DAYS = 30;
+const BATCH_DELAY_MS = 50;
 
 interface FetchState {
   loading: boolean;
@@ -15,7 +14,7 @@ interface FetchState {
 interface UseTripsResult extends FetchState {
   fetchTrips: (
     api: GeotabApi,
-    devices: Device[],
+    deviceIds: Set<string>,
     dateRange: { from: string; to: string },
   ) => Promise<TripRecord[]>;
   abort: () => void;
@@ -35,7 +34,7 @@ export function useTrips(): UseTripsResult {
   }, []);
 
   const fetchTrips = useCallback(
-    async (api: GeotabApi, devices: Device[], dateRange: { from: string; to: string }) => {
+    async (api: GeotabApi, deviceIds: Set<string>, dateRange: { from: string; to: string }) => {
       abort();
       const controller = new AbortController();
       abortRef.current = controller;
@@ -47,7 +46,7 @@ export function useTrips(): UseTripsResult {
       const fromMs = new Date(dateRange.from).getTime();
       const toMs = new Date(dateRange.to).getTime();
 
-      // Build time chunks (14-day windows)
+      // Build time chunks
       const timeChunks: { from: string; to: string }[] = [];
       let cursor = fromMs;
       while (cursor < toMs) {
@@ -59,52 +58,42 @@ export function useTrips(): UseTripsResult {
         cursor = chunkEnd;
       }
 
-      // Build device batches (50 per batch)
-      const deviceBatches: Device[][] = [];
-      for (let i = 0; i < devices.length; i += DEVICE_BATCH_SIZE) {
-        deviceBatches.push(devices.slice(i, i + DEVICE_BATCH_SIZE));
-      }
-
-      const totalSteps = timeChunks.length * deviceBatches.length;
-      let completedSteps = 0;
       const allTrips: TripRecord[] = [];
 
       for (let ci = 0; ci < timeChunks.length; ci++) {
+        if (controller.signal.aborted) { setLoading(false); return []; }
+        if (ci > 0) { await delay(BATCH_DELAY_MS); }
+        if (controller.signal.aborted) { setLoading(false); return []; }
+
         const chunk = timeChunks[ci];
-        for (let bi = 0; bi < deviceBatches.length; bi++) {
-          if (controller.signal.aborted) { setLoading(false); return []; }
-          if (ci > 0 || bi > 0) { await delay(BATCH_DELAY_MS); }
-          if (controller.signal.aborted) { setLoading(false); return []; }
 
-          const batch = deviceBatches[bi];
-          const calls: [string, Record<string, unknown>][] = batch.map((device) => [
-            "Get",
-            {
-              typeName: "Trip",
-              search: {
-                deviceSearch: { id: device.id },
-                fromDate: chunk.from,
-                toDate: chunk.to,
-              },
-              resultsLimit: 50000,
-            },
-          ]);
+        // Single call per chunk — fetch all devices' trips at once,
+        // requesting only the fields we need for aggregation.
+        const trips: TripRecord[] = await apiCall(api, "Get", {
+          typeName: "Trip",
+          search: {
+            fromDate: chunk.from,
+            toDate: chunk.to,
+          },
+          resultsLimit: 50000,
+          propertySelector: {
+            fields: ["device", "drivingDuration", "idlingDuration"],
+          },
+        });
 
-          const results = await apiMultiCall(api, calls);
-
-          results.forEach((trips: TripRecord[]) => {
-            if (Array.isArray(trips)) {
-              for (const trip of trips) {
-                allTrips.push(trip);
-              }
+        if (Array.isArray(trips)) {
+          for (const trip of trips) {
+            // Filter to selected devices if not "all"
+            if (deviceIds.size > 0 && trip.device?.id && !deviceIds.has(trip.device.id)) {
+              continue;
             }
-          });
-
-          completedSteps++;
-          const pct = (completedSteps / totalSteps) * 100;
-          setProgress(pct);
-          setProgressText("Fetching trips... " + Math.round(pct) + "%");
+            allTrips.push(trip);
+          }
         }
+
+        const pct = ((ci + 1) / timeChunks.length) * 100;
+        setProgress(pct);
+        setProgressText("Fetching trips... " + Math.round(pct) + "%");
       }
 
       setLoading(false);
