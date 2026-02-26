@@ -8,7 +8,10 @@ import {
   useEffect,
 } from "react";
 import { UserFormatProvider } from "@geotab/zenith";
-import type { GeotabApi, GeotabState, DeviceRow, FleetKpis, ExceptionChartPoint, Rule } from "../types";
+import type {
+  GeotabApi, GeotabState, DeviceRow, FleetKpis, ExceptionChartPoint,
+  Rule, TripRecord, ExceptionEventRecord, Device,
+} from "../types";
 import { useFoundationData } from "../hooks/useFoundationData";
 import { useTrips } from "../hooks/useTrips";
 import { useExceptionEvents } from "../hooks/useExceptionEvents";
@@ -58,6 +61,13 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
 
   // Rule selection state
   const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
+
+  // Cached data from last Apply so we can re-fetch exceptions when rules change
+  const cachedTrips = useRef<TripRecord[]>([]);
+  const cachedDevices = useRef<Device[]>([]);
+  const cachedDateRange = useRef<{ from: string; to: string } | null>(null);
+  const cachedPeriodSeconds = useRef(0);
+  const dataLoaded = useRef(false);
 
   const firstFocus = useRef(true);
   const focusReceived = useRef(false);
@@ -135,6 +145,24 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
   const fetchProgress = tripLoading ? tripProgress * 0.6 : 60 + eventProgress * 0.4;
   const fetchProgressText = tripLoading ? tripProgressText : eventProgressText;
 
+  /** Aggregate cached trips + new events and update state */
+  const aggregate = useCallback((
+    trips: TripRecord[],
+    events: ExceptionEventRecord[],
+    activeRules: Rule[],
+    periodSecs: number,
+  ) => {
+    const rows = buildDeviceRows(trips, events, activeRules, deviceMap, periodSecs);
+    const fleetKpis = buildFleetKpis(rows);
+    const chart = buildChartData(rows, activeRules);
+
+    setDeviceRows(rows);
+    setKpis(fleetKpis);
+    setChartData(chart);
+    setShowEmpty(rows.length === 0);
+  }, [deviceMap]);
+
+  /** Full load: fetch trips + exceptions, cache results */
   const loadData = useCallback(async () => {
     setShowEmpty(false);
     setEmptyMessage(undefined);
@@ -157,11 +185,19 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
       const trips = await fetchTrips(api, filteredDevices, dr);
       if (!trips) return;
 
+      // Cache for rule-toggle re-fetches
+      cachedTrips.current = trips;
+      cachedDevices.current = filteredDevices;
+      cachedDateRange.current = dr;
+      cachedPeriodSeconds.current = periodSeconds;
+      dataLoaded.current = true;
+
       // Step 2: Fetch exception events (if rules selected)
-      let events: any[] = [];
+      let events: ExceptionEventRecord[] = [];
       if (selectedRules.length > 0) {
-        events = await fetchEvents(api, filteredDevices, selectedRules, dr);
-        if (!events) return;
+        const result = await fetchEvents(api, filteredDevices, selectedRules, dr);
+        if (!result) return;
+        events = result;
       }
 
       // Check for large result sets
@@ -174,23 +210,43 @@ const App = forwardRef<AppHandle, AppProps>(function App({ api: initialApi, stat
       }
 
       // Step 3: Aggregate
-      const rows = buildDeviceRows(trips, events, selectedRules, deviceMap, periodSeconds);
-      const fleetKpis = buildFleetKpis(rows);
-      const chart = buildChartData(rows, selectedRules);
-
-      setDeviceRows(rows);
-      setKpis(fleetKpis);
-      setChartData(chart);
-
-      if (rows.length === 0) {
-        setShowEmpty(true);
-      }
+      aggregate(trips, events, selectedRules, periodSeconds);
     } catch (err: any) {
       console.error("Fleet Utilization error:", err);
       setShowEmpty(true);
       setEmptyMessage("Error loading data. Please try again.");
     }
-  }, [api, getDateRange, getFilteredDevices, fetchTrips, fetchEvents, selectedRules, deviceMap]);
+  }, [api, getDateRange, getFilteredDevices, fetchTrips, fetchEvents, selectedRules, deviceMap, aggregate]);
+
+  /** When rules change after data is loaded, re-fetch exceptions only */
+  const prevRuleIdsRef = useRef<string>("");
+  useEffect(() => {
+    const key = Array.from(selectedRuleIds).sort().join(",");
+    if (key === prevRuleIdsRef.current) return;
+    prevRuleIdsRef.current = key;
+
+    if (!dataLoaded.current || !cachedDateRange.current) return;
+    if (tripLoading || eventLoading) return;
+
+    // If no rules selected, just re-aggregate with trips only
+    if (selectedRules.length === 0) {
+      aggregate(cachedTrips.current, [], [], cachedPeriodSeconds.current);
+      return;
+    }
+
+    // Fetch exception events for the newly selected rules
+    (async () => {
+      try {
+        const events = await fetchEvents(
+          api, cachedDevices.current, selectedRules, cachedDateRange.current!,
+        );
+        if (!events) return;
+        aggregate(cachedTrips.current, events, selectedRules, cachedPeriodSeconds.current);
+      } catch (err) {
+        console.error("Exception fetch error:", err);
+      }
+    })();
+  }, [selectedRuleIds, selectedRules, api, fetchEvents, aggregate, tripLoading, eventLoading]);
 
   // Auto-load on first focus once foundation data is ready.
   useEffect(() => {

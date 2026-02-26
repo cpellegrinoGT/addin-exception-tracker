@@ -189,6 +189,15 @@
   padding: 0 16px 16px;
 }
 
+/* Override Zenith Table's internal scroll container to show all rows */
+.fut-content [class*="tableWrapper"],
+.fut-content [class*="TableWrapper"],
+.fut-content [class*="table-wrapper"],
+.fut-content [class*="scrollable"] {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 /* Panel toolbars (above tables) */
 .fut-panel-toolbar {
   display: flex;

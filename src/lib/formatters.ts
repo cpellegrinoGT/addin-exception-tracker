@@ -16,31 +16,30 @@ export function formatPct(n: number | null | undefined): string {
 }
 
 /**
- * Parse a Geotab duration value to fractional hours.
- * Geotab returns durations as ISO 8601 strings like "01:23:45" (HH:MM:SS)
- * or sometimes "1.01:23:45" (D.HH:MM:SS), or as a plain seconds number.
+ * Parse a Geotab duration/TimeSpan value to fractional hours.
+ *
+ * Geotab formats:
+ *   "HH:MM:SS"                  e.g. "01:23:45"
+ *   "HH:MM:SS.fffffff"          e.g. "00:05:30.0000000"
+ *   "D.HH:MM:SS"                e.g. "1.02:03:04"
+ *   "D.HH:MM:SS.fffffff"        e.g. "1.02:03:04.0000000"
+ *   plain number (seconds)
  */
 export function parseDurationToHours(duration: string | number | null | undefined): number {
   if (duration == null) return 0;
 
   if (typeof duration === "number") return duration / 3600;
 
-  const str = String(duration);
+  const str = String(duration).trim();
+  if (!str) return 0;
 
-  // Try "D.HH:MM:SS" or "HH:MM:SS"
-  const dotParts = str.split(".");
-  let days = 0;
-  let timePart = str;
-  if (dotParts.length === 2 && dotParts[0].indexOf(":") === -1) {
-    days = parseInt(dotParts[0], 10) || 0;
-    timePart = dotParts[1];
-  }
-
-  const colonParts = timePart.split(":");
-  if (colonParts.length >= 2) {
-    const h = parseInt(colonParts[0], 10) || 0;
-    const m = parseInt(colonParts[1], 10) || 0;
-    const s = colonParts.length >= 3 ? (parseInt(colonParts[2], 10) || 0) : 0;
+  // Match optional "D." prefix, then HH:MM:SS with optional ".fractional"
+  const match = str.match(/^(?:(\d+)\.)?(\d+):(\d+):(\d+)(?:\.\d+)?$/);
+  if (match) {
+    const days = match[1] ? parseInt(match[1], 10) : 0;
+    const h = parseInt(match[2], 10);
+    const m = parseInt(match[3], 10);
+    const s = parseInt(match[4], 10);
     return days * 24 + h + m / 60 + s / 3600;
   }
 
